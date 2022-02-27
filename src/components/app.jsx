@@ -8,6 +8,7 @@ import CodeModal from './codemodal';
 import WarningModal from './warningmodal';
 import CodeMirror from './codemirror';
 import DiscordView from './discordview';
+import yaml from 'js-yaml'
 
 import Ajv from 'ajv';
 import {
@@ -33,55 +34,20 @@ function FooterButton(props) {
   return <Button {...props} className='shadow-1 shadow-hover-2 shadow-up-hover' />;
 }
 
-const initialContent = 'this `supports` __a__ **subset** *of* ~~markdown~~ 😃 ```js\nfunction foo(bar) {\n  console.log(bar);\n}\n\nfoo(1);```';
-const initialColor = Math.floor(Math.random() * 0xFFFFFF);
-const initialEmbed = {
-  title: 'title ~~(did you know you can have markdown here too?)~~',
-  description: 'this supports [named links](https://discordapp.com) on top of the previously shown subset of markdown. ```\nyes, even code blocks```',
-  url: 'https://discordapp.com',
-  color: initialColor,
-  timestamp: new Date().toISOString(),
-  footer: { icon_url: 'https://cdn.discordapp.com/embed/avatars/0.png', text: 'footer text' },
-  thumbnail: { url: 'https://cdn.discordapp.com/embed/avatars/0.png' },
-  image: { url: 'https://cdn.discordapp.com/embed/avatars/0.png' },
-  author: {
-    name: 'author name',
-    url: 'https://discordapp.com',
-    icon_url: 'https://cdn.discordapp.com/embed/avatars/0.png'
-  },
-  fields: [
-    { name: '🤔', value: 'some of these properties have certain limits...' },
-    { name: '😱', value: 'try exceeding some of them!' },
-    { name: '🙄', value: 'an informative error should show up, and this view will remain as-is until all issues are fixed' },
-    { name: '<:thonkang:219069250692841473>', value: 'these last two', inline: true },
-    { name: '<:thonkang:219069250692841473>', value: 'are inline fields', inline: true }
-  ]
-};
+const initialEmbed = {};
 
 // this is just for convenience.
 // TODO: vary this more?
-const initialCode = JSON.stringify({
-  content: initialContent,
-  embed: initialEmbed
-}, null, '  ');
+const initialCode = ''
 
-const webhookExample = JSON.stringify({
-  content: `${initialContent}\nWhen sending webhooks, you can have [masked links](https://discordapp.com) in here!`,
-  embeds: [
-    initialEmbed,
-    {
-      title: 'Woah',
-      description: 'You can also have multiple embeds!\n**NOTE**: The color picker does not work with multiple embeds (yet).'
-    },
-  ]
-}, null, '  ');
+const webhookExample = '';
 
 const App = React.createClass({
   // TODO: serialize input, webhookMode, compactMode and darkTheme to query string?
 
   getInitialState() {
     return {
-      webhookMode: false,
+      webhookMode: true,
       compactMode: false,
       darkTheme: true,
       currentModal: null,
@@ -89,7 +55,7 @@ const App = React.createClass({
       data: {},
       error: null,
       colorPickerShowing: false,
-      embedColor: extractRGB(initialColor),
+      embedColor: extractRGB(0),
 
       // TODO: put in local storage?
       webhookExampleWasShown: false,
@@ -97,18 +63,13 @@ const App = React.createClass({
   },
 
   validateInput(input, webhookMode) {
-    const validator = webhookMode ? validators.webhook : validators.regular;
-
     let parsed;
     let isValid = false;
     let error = '';
 
     try {
-      parsed = JSON.parse(input);
-      isValid = validator(parsed);
-      if (!isValid) {
-        error = stringifyErrors(parsed, validator.errors);
-      }
+      parsed = yaml.load(input);
+      isValid = parsed;
     } catch (e) {
       error = e.message;
     }
@@ -185,7 +146,7 @@ const App = React.createClass({
   colorChange(color) {
     let val = combineRGB(color.rgb.r, color.rgb.g, color.rgb.b);
     if (val === 0) val = 1; // discord wont accept 0
-    const input = this.state.input.replace(/"color"\s*:\s*([0-9]+)/, '"color": ' + val);
+    const input = this.state.input.replace(/color\s*:\s*0x[0-9A-Fa-f]+/gi, 'color: 0x' + color.hex.substring(1));
     this.validateInput(input, this.state.webhookMode);
   },
 
@@ -213,15 +174,24 @@ const App = React.createClass({
       <main className='vh-100-l bg-blurple open-sans'>
 
         <div className='h-100 flex flex-column'>
+          <footer className='w-100 pa3 tc white'>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <FooterButton label={colorPickerLabel} onClick={this.openColorPicker} />
+              {colorPicker}
+            </div>
+            <FooterButton label={themeLabel} onClick={this.toggleTheme} />
+            <FooterButton label={compactModeLabel} onClick={this.toggleCompactMode} />
+            <FooterButton label='About' onClick={this.openAboutModal} />
+          </footer>
           <section className='flex-l flex-auto'>
-            <div className='vh-100 h-auto-l w-100 w-50-l pa4 pr3-l pb0-l'>
+            <div className='vh-100 h-auto-l w-100 w-50-l pa4 pr3-l pbt-l pt0'>
               <CodeMirror
                 onChange={this.onCodeChange}
                 value={this.state.input}
                 theme={this.state.darkTheme ? 'one-dark' : 'default'}
               />
             </div>
-            <div className='vh-100 h-auto-l w-100 w-50-l pa4 pl3-l pb0'>
+            <div className='vh-100 h-auto-l w-100 w-50-l pa4 pl3-l pt0'>
               <DiscordView
                 data={this.state.data}
                 error={this.state.error}
@@ -232,17 +202,6 @@ const App = React.createClass({
             </div>
           </section>
 
-          <footer className='w-100 pa3 tc white'>
-            <FooterButton label='Generate code' onClick={this.openCodeModal} />
-            <div style={{ position: 'relative', display: 'inline-block' }}>
-              <FooterButton label={colorPickerLabel} onClick={this.openColorPicker} />
-              {colorPicker}
-            </div>
-            <FooterButton label={webhookModeLabel} onClick={this.toggleWebhookMode} />
-            <FooterButton label={themeLabel} onClick={this.toggleTheme} />
-            <FooterButton label={compactModeLabel} onClick={this.toggleCompactMode} />
-            <FooterButton label='About' onClick={this.openAboutModal} />
-          </footer>
         </div>
 
         <ModalContainer
